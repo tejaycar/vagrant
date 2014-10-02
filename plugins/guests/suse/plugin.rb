@@ -16,6 +16,16 @@ module VagrantPlugins
         Cap::ChangeHostName
       end
 
+      guest_capability("suse", "halt") do
+        require_relative "cap/halt"
+        Cap::Halt
+      end
+
+      guest_capability("suse", "configure_networks") do
+        require_relative "cap/configure_networks"
+        Cap::ConfigureNetworks
+      end
+
       guest_capability("suse", "network_scripts_dir") do
         require_relative "cap/network_scripts_dir"
         Cap::NetworkScriptsDir

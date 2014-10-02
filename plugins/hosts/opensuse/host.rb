@@ -2,12 +2,10 @@ require "pathname"
 
 require "vagrant"
 
-require Vagrant.source_root.join("plugins/hosts/linux/host")
-
 module VagrantPlugins
   module HostOpenSUSE
-    class Host < VagrantPlugins::HostLinux::Host
-      def self.match?
+    class Host < Vagrant.plugin("2", :host)
+      def detect?(env)
         release_file = Pathname.new("/etc/SuSE-release")
 
         if release_file.exist?
@@ -17,17 +15,6 @@ module VagrantPlugins
         end
 
         false
-      end
-
-      # Normal, mid-range precedence.
-      def self.precedence
-        5
-      end
-
-      def initialize(*args)
-        super
-
-        @nfs_server_binary = "/etc/init.d/nfsserver"
       end
     end
   end

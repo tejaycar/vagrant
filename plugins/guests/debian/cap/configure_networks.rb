@@ -15,7 +15,7 @@ module VagrantPlugins
             # from the interface file.
             comm.sudo("sed -e '/^#VAGRANT-BEGIN/,/^#VAGRANT-END/ d' /etc/network/interfaces > /tmp/vagrant-network-interfaces")
             comm.sudo("su -c 'cat /tmp/vagrant-network-interfaces > /etc/network/interfaces'")
-            comm.sudo("rm /tmp/vagrant-network-interfaces")
+            comm.sudo("rm -f /tmp/vagrant-network-interfaces")
 
             # Accumulate the configurations to add to the interfaces file as
             # well as what interfaces we're actually configuring since we use that
@@ -25,7 +25,7 @@ module VagrantPlugins
             networks.each do |network|
               interfaces.add(network[:interface])
               entry = TemplateRenderer.render("guests/debian/network_#{network[:type]}",
-                                              :options => network)
+                                              options: network)
 
               entries << entry
             end
@@ -44,10 +44,11 @@ module VagrantPlugins
             # SSH never dies.
             interfaces.each do |interface|
               comm.sudo("/sbin/ifdown eth#{interface} 2> /dev/null")
+              comm.sudo("/sbin/ip addr flush dev eth#{interface} 2> /dev/null")
             end
 
             comm.sudo("cat /tmp/vagrant-network-entry >> /etc/network/interfaces")
-            comm.sudo("rm /tmp/vagrant-network-entry")
+            comm.sudo("rm -f /tmp/vagrant-network-entry")
 
             # Bring back up each network interface, reconfigured
             interfaces.each do |interface|

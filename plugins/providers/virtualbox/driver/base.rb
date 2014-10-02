@@ -30,9 +30,10 @@ module VagrantPlugins
 
             # On Windows, we use the VBOX_INSTALL_PATH environmental
             # variable to find VBoxManage.
-            if ENV.has_key?("VBOX_INSTALL_PATH")
+            if ENV.has_key?("VBOX_INSTALL_PATH") ||
+              ENV.has_key?("VBOX_MSI_INSTALL_PATH")
               # Get the path.
-              path = ENV["VBOX_INSTALL_PATH"]
+              path = ENV["VBOX_INSTALL_PATH"] || ENV["VBOX_MSI_INSTALL_PATH"]
               @logger.debug("VBOX_INSTALL_PATH value: #{path}")
 
               # There can actually be multiple paths in here, so we need to
@@ -43,7 +44,7 @@ module VagrantPlugins
 
                 # If the executable exists, then set it as the main path
                 # and break out
-                vboxmanage = "#{path}VBoxManage.exe"
+                vboxmanage = "#{single}VBoxManage.exe"
                 if File.file?(vboxmanage)
                   @vboxmanage_path = Vagrant::Util::Platform.cygwin_windows_path(vboxmanage)
                   break
@@ -95,9 +96,9 @@ module VagrantPlugins
         # The format of each adapter specification should be like so:
         #
         # {
-        #   :type     => :hostonly,
-        #   :hostonly => "vboxnet0",
-        #   :mac_address => "tubes"
+        #   type:     :hostonly,
+        #   hostonly: "vboxnet0",
+        #   mac_address: "tubes"
         # }
         #
         # This must support setting up both host only and bridged networks.
@@ -107,6 +108,11 @@ module VagrantPlugins
         end
 
         # Execute a raw command straight through to VBoxManage.
+        #
+        # Accepts a retryable: true option if the command should be retried
+        # upon failure.
+        #
+        # Raises a VBoxManage error if it fails.
         #
         # @param [Array] command Command to execute.
         def execute_command(command)
@@ -127,11 +133,11 @@ module VagrantPlugins
         # The format of each port hash should be the following:
         #
         #     {
-        #       :name => "foo",
-        #       :hostport => 8500,
-        #       :guestport => 80,
-        #       :adapter => 1,
-        #       :protocol => "tcp"
+        #       name: "foo",
+        #       hostport: 8500,
+        #       guestport: 80,
+        #       adapter: 1,
+        #       protocol: "tcp"
         #     }
         #
         # Note that "adapter" and "protocol" are optional and will default
@@ -151,6 +157,11 @@ module VagrantPlugins
         # @param [String] ovf Path to the OVF file.
         # @return [String] UUID of the imported VM.
         def import(ovf)
+        end
+
+        # Returns the maximum number of network adapters.
+        def max_network_adapters
+          8
         end
 
         # Returns a list of forwarded ports for a VM.
@@ -173,6 +184,14 @@ module VagrantPlugins
         #
         # @return [String]
         def read_guest_additions_version
+        end
+
+        # Returns the value of a guest property on the current VM.
+        #
+        # @param  [String] property the name of the guest property to read
+        # @return [String] value of the guest property
+        # @raise  [VirtualBoxGuestPropertyNotFound] if the guest property does not have a value
+        def read_guest_property(property)
         end
 
         # Returns a list of available host only interfaces.
@@ -248,6 +267,10 @@ module VagrantPlugins
         def suspend
         end
 
+        # Unshare folders.
+        def unshare_folders(names)
+        end
+
         # Verifies that the driver is ready to accept work.
         #
         # This should raise a VagrantError if things are not ready.
@@ -279,10 +302,10 @@ module VagrantPlugins
           # Variable to store our execution result
           r = nil
 
-          # If there is an error with VBoxManage, this gets set to true
-          errored = false
+          retryable(on: Vagrant::Errors::VBoxManageError, tries: tries, sleep: 1) do
+            # If there is an error with VBoxManage, this gets set to true
+            errored = false
 
-          retryable(:on => Vagrant::Errors::VBoxManageError, :tries => tries, :sleep => 1) do
             # Execute the command
             r = raw(*command, &block)
 
@@ -317,14 +340,14 @@ module VagrantPlugins
                 errored = true
               end
             end
-          end
 
-          # If there was an error running VBoxManage, show the error and the
-          # output.
-          if errored
-            raise Vagrant::Errors::VBoxManageError,
-              :command => command.inspect,
-              :stderr  => r.stderr
+            # If there was an error running VBoxManage, show the error and the
+            # output.
+            if errored
+              raise Vagrant::Errors::VBoxManageError,
+                command: command.inspect,
+                stderr:  r.stderr
+            end
           end
 
           # Return the output, making sure to replace any Windows-style
@@ -336,32 +359,18 @@ module VagrantPlugins
         def raw(*command, &block)
           int_callback = lambda do
             @interrupted = true
-            @logger.info("Interrupted.")
+
+            # We have to execute this in a thread due to trap contexts
+            # and locks.
+            Thread.new { @logger.info("Interrupted.") }.join
           end
 
           # Append in the options for subprocess
-          command << { :notify => [:stdout, :stderr] }
-
-          # The following is a workaround for a combined VirtualBox and
-          # Mac OS X 10.8 bug:
-          #
-          # Remove the DYLD_LIBRARY_PATH environmental variable on Mac. This
-          # is to fix a bug in Mac OS X 10.8 where a warning is printed to the
-          # console if this is set when executing certain programs, which
-          # can cause some VBoxManage commands to break because they work
-          # by just reading stdout and don't expect the OS to just inject
-          # garbage into it.
-          old_dyld_lib_path = ENV.delete("DYLD_LIBRARY_PATH")
-          old_ld_lib_path   = ENV.delete("LD_LIBRARY_PATH")
+          command << { notify: [:stdout, :stderr] }
 
           Vagrant::Util::Busy.busy(int_callback) do
             Vagrant::Util::Subprocess.execute(@vboxmanage_path, *command, &block)
           end
-        ensure
-          # Reset the library path if it was set before. See above comments
-          # for more information on why this was unset in the first place.
-          ENV["DYLD_LIBRARY_PATH"] = old_dyld_lib_path if old_dyld_lib_path
-          ENV["LD_LIBRARY_PATH"]   = old_ld_lib_path if old_ld_lib_path
         end
       end
     end

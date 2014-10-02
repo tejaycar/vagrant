@@ -1,53 +1,42 @@
 require 'optparse'
 
 require_relative "base"
+require_relative "mixin_install_opts"
 
 module VagrantPlugins
   module CommandPlugin
     module Command
       class Install < Base
+        include MixinInstallOpts
+
         def execute
-          options = {}
+          options = { verbose: false }
 
           opts = OptionParser.new do |o|
-            o.banner = "Usage: vagrant plugin install <name> [-h]"
+            o.banner = "Usage: vagrant plugin install <name>... [-h]"
             o.separator ""
+            build_install_opts(o, options)
 
-            o.on("--entry-point NAME", String,
-                 "The name of the entry point file for loading the plugin.") do |entry_point|
-              options[:entry_point] = entry_point
-            end
-
-            o.on("--plugin-prerelease",
-                 "Allow prerelease versions of this plugin.") do |plugin_prerelease|
-              options[:plugin_prerelease] = plugin_prerelease
-            end
-
-            o.on("--plugin-source PLUGIN_SOURCE", String,
-                 "Add a RubyGems repository source") do |plugin_source|
-              options[:plugin_sources] ||= []
-              options[:plugin_sources] << plugin_source
-            end
-
-            o.on("--plugin-version PLUGIN_VERSION", String,
-                 "Install a specific version of the plugin") do |plugin_version|
-              options[:plugin_version] = plugin_version
+            o.on("--verbose", "Enable verbose output for plugin installation") do |v|
+              options[:verbose] = v
             end
           end
 
           # Parse the options
           argv = parse_options(opts)
           return if !argv
-          raise Vagrant::Errors::CLIInvalidUsage, :help => opts.help.chomp if argv.length < 1
+          raise Vagrant::Errors::CLIInvalidUsage, help: opts.help.chomp if argv.length < 1
 
           # Install the gem
-          action(Action.action_install, {
-            :plugin_entry_point => options[:entry_point],
-            :plugin_prerelease  => options[:plugin_prerelease],
-            :plugin_version     => options[:plugin_version],
-            :plugin_sources     => options[:plugin_sources],
-            :plugin_name        => argv[0]
-          })
+          argv.each do |name|
+            action(Action.action_install, {
+              plugin_entry_point: options[:entry_point],
+              plugin_version:     options[:plugin_version],
+              plugin_sources:     options[:plugin_sources],
+              plugin_name:        name,
+              plugin_verbose:     options[:verbose]
+            })
+          end
 
           # Success, exit status 0
           0

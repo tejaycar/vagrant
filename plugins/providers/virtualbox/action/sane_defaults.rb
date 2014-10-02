@@ -14,17 +14,6 @@ module VagrantPlugins
           # helpers.
           @env = env
 
-          # Enable the host IO cache on the sata controller. Note that
-          # if this fails then its not a big deal, so we don't raise any
-          # errors. The Host IO cache vastly improves disk IO performance
-          # for VMs.
-          command = [
-            "storagectl", env[:machine].id,
-            "--name", "SATA Controller",
-            "--hostiocache", "on"
-          ]
-          attempt_and_log(command, "Enabling the Host I/O cache on the SATA controller...")
-
           # Use rtcuseutc so that the VM sees UTC time.
           command = ["modifyvm", env[:machine].id, "--rtcuseutc", "on"]
           attempt_and_log(command, "Enabling rtcuseutc...")
@@ -37,9 +26,9 @@ module VagrantPlugins
               command = ["modifyvm", env[:machine].id, "--natdnsproxy1", "on"]
               attempt_and_log(command, "Enable the NAT DNS proxy on adapter 1...")
             else
-              command = [ "modifyvm", env[:machine].id, "--natdnsproxy1", "off" ]
+              command = ["modifyvm", env[:machine].id, "--natdnsproxy1", "off" ]
               attempt_and_log(command, "Disable the NAT DNS proxy on adapter 1...")
-              command = [ "modifyvm", env[:machine].id, "--natdnshostresolver1", "off" ]
+              command = ["modifyvm", env[:machine].id, "--natdnshostresolver1", "off" ]
               attempt_and_log(command, "Disable the NAT DNS resolver on adapter 1...")
             end
           else
@@ -55,11 +44,20 @@ module VagrantPlugins
         # the given string to the log, and also includes the exit status in
         # the log message.
         #
+        # We assume every command is idempotent and pass along the `retryable`
+        # flag. This is because VBoxManage is janky about running simultaneously
+        # on the same box, and if we up multiple boxes at the same time, a bunch
+        # of modifyvm commands get fired
+        #
         # @param [Array] command Command to run
         # @param [String] log Log message to write.
         def attempt_and_log(command, log)
-          result = @env[:machine].provider.driver.execute_command(command)
-          @logger.info("#{log} (exit status = #{result.exit_code})")
+          begin
+            @env[:machine].provider.driver.execute_command(
+              command + [retryable: true])
+          rescue Vagrant::Errors::VBoxManageError => e
+            @logger.info("#{log} (error = #{e.inspect})")
+          end
         end
 
         # This uses some heuristics to determine if the NAT DNS proxy should

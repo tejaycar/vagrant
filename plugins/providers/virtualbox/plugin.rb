@@ -9,7 +9,7 @@ module VagrantPlugins
       VirtualBox-based virtual machines.
       EOF
 
-      provider(:virtualbox) do
+      provider(:virtualbox, priority: 6) do
         require File.expand_path("../provider", __FILE__)
         Provider
       end
@@ -17,6 +17,21 @@ module VagrantPlugins
       config(:virtualbox, :provider) do
         require File.expand_path("../config", __FILE__)
         Config
+      end
+
+      synced_folder(:virtualbox) do
+        require File.expand_path("../synced_folder", __FILE__)
+        SyncedFolder
+      end
+
+      provider_capability(:virtualbox, :forwarded_ports) do
+        require_relative "cap"
+        Cap
+      end
+
+      provider_capability(:virtualbox, :nic_mac_addresses) do
+        require_relative "cap"
+        Cap
       end
     end
 
@@ -29,6 +44,7 @@ module VagrantPlugins
       autoload :Version_4_0, File.expand_path("../driver/version_4_0", __FILE__)
       autoload :Version_4_1, File.expand_path("../driver/version_4_1", __FILE__)
       autoload :Version_4_2, File.expand_path("../driver/version_4_2", __FILE__)
+      autoload :Version_4_3, File.expand_path("../driver/version_4_3", __FILE__)
     end
 
     module Model

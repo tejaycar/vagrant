@@ -3,6 +3,10 @@ require 'optparse'
 module VagrantPlugins
   module CommandProvision
     class Command < Vagrant.plugin("2", :command)
+      def self.synopsis
+        "provisions the vagrant machine"
+      end
+
       def execute
         options = {}
         options[:provision_types] = nil
